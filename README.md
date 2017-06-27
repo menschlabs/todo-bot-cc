@@ -197,7 +197,7 @@ createdb YOUR-APP-NAME
 
 #### Windows:
 
-Add `some\path\PostgreSQL\<version>\bin` and `some\path\PostgreSQL\<version>\bin` to the System Environment Variables.
+Add `some\path\PostgreSQL\<version>\bin` and `some\path\PostgreSQL\<version>\lib` to the System Environment Variables.
 
 Now to start the server, open pgAdmin 4 and navigate to: `Servers > PostgreSQL 9.* > Databases > postgres` to start the server on port 5432.
 
@@ -252,10 +252,10 @@ $ export DATABASE_URL="postgres://localhost/YOUR-APP-NAME"
 
 - For Windows:
 ```
- set FACEBOOK_PAGE_ACCESS_TOKEN=YOUR-ACCESS-TOKEN
+set FACEBOOK_PAGE_ACCESS_TOKEN=YOUR-ACCESS-TOKEN
 set DATABASE_URL=postgres://<username>:<password>@localhost:5432/YOUR-APP-NAME
 ```
- **username is postgres and password is entered by you during setup**
+  **username is postgres and password is entered by you during setup**
 
 - Run a script to create some DB sample data:
 ```
