@@ -59,9 +59,9 @@ platform instead).
 - Create a new app. Choose suitable values for app name and contact email.
 
 - On the left sidebar click 'Settings'. Choose "Apps for Messenger" from the category
-  dropdown. Click 'Save Changes' on the bottom right. 
-  
-- Click 'Add Product' on the left sidebar. Navigate to 'Messenger' and click 'Get Started'. 
+  dropdown. Click 'Save Changes' on the bottom right.
+
+- Click 'Add Product' on the left sidebar. Navigate to 'Messenger' and click 'Get Started'.
 
 - On the next page, generate an access token for a Facebook Page that you want
   to use for sending and receiving messages. It's probably best to use a
@@ -137,8 +137,18 @@ $ brew cask install ngrok  # To get the latest version, which is not open source
 ```
 
 On Linux, most of these should be installable via your package manager of
-choice (apt-get, yum, etc). On Windows, your best bet is likely to use the
-dedicated installers for each.
+choice (apt-get, yum, etc).
+
+On Windows, your best bet is likely to use the
+dedicated installers for each, using the following links:
+
+- [Python](https://www.python.org/downloads/)  
+- [Git](https://git-scm.com/download/win)
+- [Postgresql](https://www.postgresql.org/download/windows/)
+
+**Note:** _Make sure to add these paths to System Variables, and enter a simple password while installing Postgres_
+
+**In windows always make sure that the Command Prompt or Powershell is running as Administrator.**
 
 Last, install the virtualenv tool, which is needed to isolate your python
 development environment from your system installation:
@@ -156,6 +166,7 @@ Postgres sometimes needs a bit more massaging to work properly.
 
 After installing it, make sure it is running as a daemon in the background:
 
+#### Mac and Linux:
 ```
 ps auxwww | grep postgres
 ```
@@ -184,6 +195,23 @@ createdb YOUR-APP-NAME
 
 (replacing `YOUR-APP-NAME` with your actual app name, of course).
 
+#### Windows:
+
+Add `some\path\PostgreSQL\<version>\bin` and `some\path\PostgreSQL\<version>\bin` to the System Environment Variables.
+
+Now to start the server, open pgAdmin 4 and navigate to: `Servers > PostgreSQL 9.* > Databases > postgres` to start the server on port 5432.
+
+You can also start the server by running the command,
+
+```
+pg_ctl -U postgres -D "some\path\PostgreSQL\<version>\data" start
+```
+
+Now create the Database using the command:
+```
+createdb -U YOUR-APP-NAME
+```
+
 If all else fails, you can always fall back to using SQLite for local
 development, although we still need to install Postgres-related libraries in
 later stages, since that's what we're using on Heroku.
@@ -193,9 +221,17 @@ later stages, since that's what we're using on Heroku.
 - Clone this repo into a directory of your choice and `cd` into it.
 
 - Create a new virtual environment in the src directory and activate it:
+
+#### Mac/Linux
 ```
 virtualenv src/venv && source src/venv/bin/activate
 ```
+#### Windows
+```
+virtualenv .\src\venv
+.\src\venv\Scripts\activate
+```
+
 Your prompt should change to include the prefix "(venv)".
 
 - Install the required packages into the virtual environment:
@@ -208,12 +244,18 @@ If this fails when installing psycopg2 on a Mac running El Capitan or Sierra,
 you're running into any other issues at this step that you are unable to
 resolve, please let us know.
 
-- Set local environment variables for your database and the Facebook Page Access
-Token:
+- Set local environment variables for your database and the Facebook Page Access Token in Mac/Linux:
 ```
 $ export FACEBOOK_PAGE_ACCESS_TOKEN="YOUR-ACCESS-TOKEN"
 $ export DATABASE_URL="postgres://localhost/YOUR-APP-NAME"
 ```
+
+- For Windows:
+```
+ set FACEBOOK_PAGE_ACCESS_TOKEN=YOUR-ACCESS-TOKEN
+set DATABASE_URL=postgres://<username>:<password>@localhost:5432/YOUR-APP-NAME
+```
+ **username is postgres and password is entered by you during setup**
 
 - Run a script to create some DB sample data:
 ```
