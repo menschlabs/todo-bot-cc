@@ -9,6 +9,7 @@ This file creates your application.
 
 import os
 
+import my_messages
 import flask
 import requests
 from flask_sqlalchemy import SQLAlchemy
@@ -36,10 +37,19 @@ db = SQLAlchemy(app)
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True)
+    userid = db.Column(db.String(80), unique=True)
 
 
-class Address(db.Model):
+class Todo(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    todo = db.Column(db.String, nullable=False)
+    done = db.Column(db.Boolean, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'),
+                        nullable=False)
+    user = db.relationship('User', backref='todo')
+
+
+"""class Address(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     # Free form address for simplicity.
     full_address = db.Column(db.String, nullable=False)
@@ -49,7 +59,7 @@ class Address(db.Model):
                         nullable=False)
     # This adds an attribute 'user' to each address, and an attribute
     # 'addresses' (containing a list of addresses) to each user.
-    user = db.relationship('User', backref='addresses')
+    user = db.relationship('User', backref='addresses')"""
 
 
 @app.route('/')
@@ -62,10 +72,9 @@ def index():
     """
     # Just for demonstration purposes
     for user in User.query:  #
-        print 'User %d, username %s' % (user.id, user.username)
-        for address in user.addresses:
-            print 'Address %d, full_address %s' % (
-                address.id, address.full_address)
+        print 'User %d, userid %s' % (user.id, user.userid)
+        for todo in user.todo:
+            print 'Todo %s' % (todo.todo)
 
     # Render all of this into an HTML template and return it. We use
     # User.query.all() to obtain a list of all users, rather than an
@@ -109,33 +118,60 @@ def fb_webhook():
 
     # Handle an incoming message.
     # TODO: Improve error handling in case of unexpected payloads.
-    if(payload['object'] == 'page' and payload['entry']):
-        for entry in payload['entry']:
-            for event in entry['messaging']:
-                if 'message' not in event:
-                    continue
-                message = event['message']
-                # Ignore messages sent by us.
-                if message.get('is_echo', False):
-                    continue
-                # Ignore messages with non-text content.
-                if 'text' not in message:
-                    continue
-                sender_id = event['sender']['id']
-                request_url = FACEBOOK_API_MESSAGE_SEND_URL % (
-                    app.config['FACEBOOK_PAGE_ACCESS_TOKEN'])
-                message_text = processText(message['text'])
-                requests.post(request_url,
-                              headers={'Content-Type': 'application/json'},
-                              json={'recipient': {'id': sender_id},
-                                    'message': {'text': message_text}})
+    try:
+        if(payload['object'] == 'page' and payload['entry']):
+            for entry in payload['entry']:
+                for event in entry['messaging']:
+                    if 'message' not in event:
+                        continue
+                    message = event['message']
+                    sender = event['sender']['id']
+                    print sender
+                    # Ignore messages sent by us.
+                    if message.get('is_echo', False):
+                        continue
+                    # Ignore messages with non-text content.
+                    if 'text' not in message:
+                        continue
+                    sender_id = event['sender']['id']
+                    request_url = FACEBOOK_API_MESSAGE_SEND_URL % (
+                        app.config['FACEBOOK_PAGE_ACCESS_TOKEN'])
+                    message_text = processMessage(message['text'],
+                                                              sender)
+                    if not message_text:
+                        message_text = "Sorry did not get you..."
+                    requests.post(request_url,
+                                  headers={'Content-Type': 'application/json'},
+                                  json={'recipient': {'id': sender_id},
+                                        'message': {'text': message_text}})
 
-    # Return an empty response.
-    return ''
+        # Return an empty response.
+        return ''
+    except:
+        requests.post(request_url,
+                      headers={'Content-Type': 'application/json'},
+                      json={'recipient': {'id': sender_id},
+                            'message': {'text': "Something Happened"}})
 
 
-def processText(message = ""):
-    return "Received:\n" + message
+def processMessage(text, userid):
+    if text == "LIST":
+        print text
+        user = db.session.query(User, Todo).filter(User.userid==userid).join(Todo)
+        user = User.query.filter(User.userid == userid)
+        if user:
+            output = ""
+            if not len(user.todo):
+                return "The list looks empty!"
+            for todo in user.todo:
+                output += todo.todo
+            return output
+        else:
+            print "In else"
+            user = User(userid=userid)
+            db.session.add(user)
+            db.session.commit()
+            return "The list looks empty!"
 
 
 if __name__ == '__main__':

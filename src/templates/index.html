@@ -3,11 +3,11 @@
 {% if users %}
   <ol>
     {% for user in users %}
-      <li>{{ user.username }}
-        {% if user.addresses %}
+      <li>{{ user.userid }}
+        {% if user.todo %}
           <ol>
-            {% for address in user.addresses %}
-              <li>{{ address.full_address }}</li>
+            {% for todo in user.todo %}
+              <li>{{ todo.todo }}</li>
             {% endfor %}
           </ol>
         {% else %}
