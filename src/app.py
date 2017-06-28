@@ -9,7 +9,7 @@ This file creates your application.
 
 import os
 
-import my_messages
+import messages
 import flask
 import requests
 from flask_sqlalchemy import SQLAlchemy
@@ -136,8 +136,8 @@ def fb_webhook():
                     sender_id = event['sender']['id']
                     request_url = FACEBOOK_API_MESSAGE_SEND_URL % (
                         app.config['FACEBOOK_PAGE_ACCESS_TOKEN'])
-                    message_text = processMessage(message['text'],
-                                                              sender)
+                    message_text = messages.processMessage(message['text'],
+                                                           sender)
                     if not message_text:
                         message_text = "Sorry did not get you..."
                     requests.post(request_url,
@@ -152,26 +152,6 @@ def fb_webhook():
                       headers={'Content-Type': 'application/json'},
                       json={'recipient': {'id': sender_id},
                             'message': {'text': "Something Happened"}})
-
-
-def processMessage(text, userid):
-    if text == "LIST":
-        print text
-        user = db.session.query(User, Todo).filter(User.userid==userid).join(Todo)
-        user = User.query.filter(User.userid == userid)
-        if user:
-            output = ""
-            if not len(user.todo):
-                return "The list looks empty!"
-            for todo in user.todo:
-                output += todo.todo
-            return output
-        else:
-            print "In else"
-            user = User(userid=userid)
-            db.session.add(user)
-            db.session.commit()
-            return "The list looks empty!"
 
 
 if __name__ == '__main__':
