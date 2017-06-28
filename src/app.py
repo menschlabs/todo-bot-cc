@@ -110,7 +110,7 @@ def fb_webhook():
             if 'text' not in message:
                 continue
             sender_id = event['sender']['id']
-            message_text = message['text']
+            message_text = processText(message['text'])
             request_url = FACEBOOK_API_MESSAGE_SEND_URL % (
                 app.config['FACEBOOK_PAGE_ACCESS_TOKEN'])
             requests.post(request_url,
@@ -120,6 +120,11 @@ def fb_webhook():
 
     # Return an empty response.
     return ''
+
+
+def processText(message = ""):
+    return "Received:\n" + message
+
 
 if __name__ == '__main__':
     app.run(debug=True)
