@@ -12,14 +12,19 @@ import os
 import flask
 import requests
 from flask_sqlalchemy import SQLAlchemy
+import pprint
+import json
 
 FACEBOOK_API_MESSAGE_SEND_URL = (
     'https://graph.facebook.com/v2.6/me/messages?access_token=%s')
+FACEBOOK_APP_URL = ('https://graph.facebook.com/app?access_token=%s')
+FACEBOOK_APP_ID = '723638517839355'
 
 app = flask.Flask(__name__)
 
 # TODO: Set environment variables appropriately.
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
 app.config['FACEBOOK_PAGE_ACCESS_TOKEN'] = os.environ[
     'FACEBOOK_PAGE_ACCESS_TOKEN']
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'mysecretkey')
@@ -93,30 +98,37 @@ def fb_webhook():
     # Get the request body as a dict, parsed from JSON.
     payload = flask.request.json
 
+    pprint.pprint(payload)
+    app_url = FACEBOOK_APP_URL % (app.config['FACEBOOK_PAGE_ACCESS_TOKEN'])
+    app_data = json.loads(requests.get(app_url).content)
+    if app_data['id'] != FACEBOOK_APP_ID:
+        return ''
+
     # TODO: Validate app ID and other parts of the payload to make sure we're
     # not accidentally processing data that wasn't intended for us.
 
     # Handle an incoming message.
     # TODO: Improve error handling in case of unexpected payloads.
-    for entry in payload['entry']:
-        for event in entry['messaging']:
-            if 'message' not in event:
-                continue
-            message = event['message']
-            # Ignore messages sent by us.
-            if message.get('is_echo', False):
-                continue
-            # Ignore messages with non-text content.
-            if 'text' not in message:
-                continue
-            sender_id = event['sender']['id']
-            message_text = processText(message['text'])
-            request_url = FACEBOOK_API_MESSAGE_SEND_URL % (
-                app.config['FACEBOOK_PAGE_ACCESS_TOKEN'])
-            requests.post(request_url,
-                          headers={'Content-Type': 'application/json'},
-                          json={'recipient': {'id': sender_id},
-                                'message': {'text': message_text}})
+    if(payload['object'] == 'page' and payload['entry']):
+        for entry in payload['entry']:
+            for event in entry['messaging']:
+                if 'message' not in event:
+                    continue
+                message = event['message']
+                # Ignore messages sent by us.
+                if message.get('is_echo', False):
+                    continue
+                # Ignore messages with non-text content.
+                if 'text' not in message:
+                    continue
+                sender_id = event['sender']['id']
+                request_url = FACEBOOK_API_MESSAGE_SEND_URL % (
+                    app.config['FACEBOOK_PAGE_ACCESS_TOKEN'])
+                message_text = processText(message['text'])
+                requests.post(request_url,
+                              headers={'Content-Type': 'application/json'},
+                              json={'recipient': {'id': sender_id},
+                                    'message': {'text': message_text}})
 
     # Return an empty response.
     return ''
