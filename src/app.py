@@ -16,6 +16,7 @@ import requests
 from flask_sqlalchemy import SQLAlchemy
 import pprint
 import json
+import datetime
 
 FACEBOOK_API_MESSAGE_SEND_URL = (
     'https://graph.facebook.com/v2.6/me/messages?access_token=%s')
@@ -45,6 +46,7 @@ class Todo(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     todo = db.Column(db.String, nullable=False)
     done = db.Column(db.Boolean, nullable=False)
+    doneTime = db.Column(db.String)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'),
                         nullable=False)
     user = db.relationship('User', backref='todo')
@@ -105,31 +107,37 @@ def fb_webhook():
 
     # Handle an incoming message.
     # TODO: Improve error handling in case of unexpected payloads.
-    if(payload['object'] == 'page' and payload['entry']):
-        for entry in payload['entry']:
-            for event in entry['messaging']:
-                if 'message' not in event:
-                    continue
-                message = event['message']
-                # Ignore messages sent by us.
-                if message.get('is_echo', False):
-                    continue
-                # Ignore messages with non-text content.
-                if 'text' not in message:
-                    continue
-                pprint.pprint(payload)
-                sender_id = event['sender']['id']
-                request_url = FACEBOOK_API_MESSAGE_SEND_URL % (
-                    app.config['FACEBOOK_PAGE_ACCESS_TOKEN'])
-                requests.post(request_url,
-                              headers={'Content-Type': 'application/json'},
-                               json={"recipient":{"id":sender_id},
-                                     "sender_action":"typing_on"})
-                message_json = processMessage(sender_id, message['text'])
-                requests.post(request_url,
-                              headers={'Content-Type': 'application/json'},
-                              json={'recipient': {'id': sender_id},
-                                    'message': message_json})
+    try:
+        if(payload['object'] == 'page' and payload['entry']):
+            for entry in payload['entry']:
+                for event in entry['messaging']:
+                    if 'message' not in event:
+                        continue
+                    message = event['message']
+                    # Ignore messages sent by us.
+                    if message.get('is_echo', False):
+                        continue
+                    # Ignore messages with non-text content.
+                    if 'text' not in message:
+                        continue
+                    pprint.pprint(payload)
+                    sender_id = event['sender']['id']
+                    request_url = FACEBOOK_API_MESSAGE_SEND_URL % (
+                        app.config['FACEBOOK_PAGE_ACCESS_TOKEN'])
+                    requests.post(request_url,
+                                  headers={'Content-Type': 'application/json'},
+                                   json={"recipient":{"id":sender_id},
+                                         "sender_action":"typing_on"})
+                    message_json = processMessage(sender_id, message['text'])
+                    requests.post(request_url,
+                                  headers={'Content-Type': 'application/json'},
+                                  json={'recipient': {'id': sender_id},
+                                        'message': message_json})
+    except:
+        requests.post(request_url,
+                      headers={'Content-Type': 'application/json'},
+                       json={"recipient":{"id":sender_id},
+                             'message': {'text': "Some internal error!"}})
 
     # Return an empty response.
     return ''
@@ -146,6 +154,7 @@ def markDone(user, number):
     if user and number:
         todo = user.todo[number]
         todo.done = True
+        todo.doneTime = str(datetime.datetime.now())
         db.session.add(todo)
         db.session.commit()
         return "Marked Todo: " + todo.todo + " as done!"
@@ -153,30 +162,38 @@ def markDone(user, number):
         return "Sorry did not get you...\nTry again"
 
 
-def listAll(user=None, all=True):
+def todoText(todo):
+    if todo.done:
+        return todo.doneTime
+    else:
+        return "Not marked as done"
+
+
+def listAll(user=None, all=True, output=""):
     if user:
-        output = ""
+        elements = []
         if all:
-            i = 0
             if len(user.todo) == 0:
                 return "No Todos added\nAdd some on your own"
             for todo in user.todo:
-                output += str(i) + "# " + todo.todo + "\n"
-                i += 1
-            return output
+                elements.append({"title": str(todo.id)+") "+todo.todo,
+                                 "image_url":"",
+                                 "subtitle":todoText(todo)})
         else:
-            i = 0
             if len(user.todo) == 0:
-                return "No Todos added\n Add some on your own"
+                output += "No Todos added\n Add some on your own"
             for todo in user.todo:
                 if todo.done:
-                    output += str(i) + "# " + todo.todo + "\n"
-                i += 1
+                    elements.append({"title": todo.todo,
+                                     "image_url":"",
+                                     "subtitle":todoText(todo)})
             if len(output) == 0:
-                output = "No Todos are marked done"
-            return output
+                output += "No Todos are marked done"
     else:
-        return "Application ran into some error"
+        output += "Application ran into some error"
+    return {"attachment": {"type": "template",
+                           "payload": {"template_type": "generic",
+                                       "elements": elements}}}
 
 
 def addItem(user, reminder):
@@ -199,8 +216,10 @@ def processMessage(sender, text):
                 "You can add todo items in our app",
                 "Feel free to chat with our app in natural language",
                 "Eg: remind me to water the plants",
-                "Eg: list all todos",
-                "Eg: mark 3 as done"]
+                "    list all todos",
+                "    mark 3 as done",
+                "    show all todos",
+                "    add 'something' to todo list"]
         for r in retList:
             output += r + "\n"
         output += "\n"
@@ -210,7 +229,9 @@ def processMessage(sender, text):
     elif intent == "done":
         return {'text': output + "" + markDone(user, number)}
     elif intent == "list":
-        return {'text': output + "" + listAll(user=user)}
+        x = listAll(user=user,output=output)
+        pprint.pprint(x)
+        return x
     elif intent == "showdone":
         return {'text': output + "" + listAll(user=user,all=False)}
     elif intent == "add":
