@@ -17,6 +17,7 @@ from flask_sqlalchemy import SQLAlchemy
 import pprint
 import json
 import datetime
+from operator import attrgetter
 
 FACEBOOK_API_MESSAGE_SEND_URL = (
     'https://graph.facebook.com/v2.6/me/messages?access_token=%s')
@@ -45,6 +46,7 @@ class User(db.Model):
 class Todo(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     todo = db.Column(db.String, nullable=False)
+    todoid = db.Column(db.String, nullable=False)
     done = db.Column(db.Boolean, nullable=False)
     doneTime = db.Column(db.String)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'),
@@ -107,37 +109,31 @@ def fb_webhook():
 
     # Handle an incoming message.
     # TODO: Improve error handling in case of unexpected payloads.
-    try:
-        if(payload['object'] == 'page' and payload['entry']):
-            for entry in payload['entry']:
-                for event in entry['messaging']:
-                    if 'message' not in event:
-                        continue
-                    message = event['message']
-                    # Ignore messages sent by us.
-                    if message.get('is_echo', False):
-                        continue
-                    # Ignore messages with non-text content.
-                    if 'text' not in message:
-                        continue
-                    pprint.pprint(payload)
-                    sender_id = event['sender']['id']
-                    request_url = FACEBOOK_API_MESSAGE_SEND_URL % (
-                        app.config['FACEBOOK_PAGE_ACCESS_TOKEN'])
-                    requests.post(request_url,
-                                  headers={'Content-Type': 'application/json'},
-                                   json={"recipient":{"id":sender_id},
-                                         "sender_action":"typing_on"})
-                    message_json = processMessage(sender_id, message['text'])
-                    requests.post(request_url,
-                                  headers={'Content-Type': 'application/json'},
-                                  json={'recipient': {'id': sender_id},
-                                        'message': message_json})
-    except:
-        requests.post(request_url,
-                      headers={'Content-Type': 'application/json'},
-                       json={"recipient":{"id":sender_id},
-                             'message': {'text': "Some internal error!"}})
+    if(payload['object'] == 'page' and payload['entry']):
+        for entry in payload['entry']:
+            for event in entry['messaging']:
+                if 'message' not in event:
+                    continue
+                message = event['message']
+                # Ignore messages sent by us.
+                if message.get('is_echo', False):
+                    continue
+                # Ignore messages with non-text content.
+                if 'text' not in message:
+                    continue
+                pprint.pprint(payload)
+                sender_id = event['sender']['id']
+                request_url = FACEBOOK_API_MESSAGE_SEND_URL % (
+                    app.config['FACEBOOK_PAGE_ACCESS_TOKEN'])
+                requests.post(request_url,
+                              headers={'Content-Type': 'application/json'},
+                               json={"recipient":{"id":sender_id},
+                                     "sender_action":"typing_on"})
+                message_json = processMessage(sender_id, message['text'])
+                requests.post(request_url,
+                              headers={'Content-Type': 'application/json'},
+                              json={'recipient': {'id': sender_id},
+                                    'message': message_json})
 
     # Return an empty response.
     return ''
@@ -147,22 +143,40 @@ GREETINGS = ['Hello','Hi!','Hey!']
 
 
 def greetings():
+    """
+    This method will return a random greeting to the user.
+    """
     return random.choice(GREETINGS)
 
 
 def markDone(user, number):
+    """
+    This method will mark a specifed todo as done
+    """
     if user and number:
-        todo = user.todo[number]
-        todo.done = True
-        todo.doneTime = str(datetime.datetime.now())
-        db.session.add(todo)
-        db.session.commit()
-        return "Marked Todo: " + todo.todo + " as done!"
+        todos = user.todo
+        todo = None
+        for t in todos:
+            print type(t.todoid), type(number)
+            if int(t.todoid) == number:
+                todo = t
+                break
+        if todo:
+            todo.done = True
+            todo.doneTime = str(datetime.datetime.now())
+            db.session.add(todo)
+            db.session.commit()
+            return "Marked Todo: " + todo.todo + " as done!"
+        else:
+            return "The specified id is not available\nTry again"
     else:
         return "Sorry did not get you...\nTry again"
 
 
 def todoText(todo):
+    """
+    this method is used to display the subtitle for each todo
+    """
     if todo.done:
         return todo.doneTime
     else:
@@ -170,25 +184,32 @@ def todoText(todo):
 
 
 def listAll(user=None, all=True, output=""):
+    """
+    This method is used to show all the todos and done todos
+    """
+    elements = []
     if user:
-        elements = []
         if all:
             if len(user.todo) == 0:
-                return "No Todos added\nAdd some on your own"
+                return {'text': "No Todos added\nAdd some on your own"}
+            user.todo = sorted(user.todo, key=attrgetter('todoid'))
             for todo in user.todo:
-                elements.append({"title": str(todo.id)+") "+todo.todo,
-                                 "image_url":"",
-                                 "subtitle":todoText(todo)})
+                if not todo.done:
+                    elements.append({"title": str(todo.todoid)+") "+todo.todo,
+                                     "image_url":"",
+                                     "subtitle":todoText(todo)})
+            if len(elements) == 0:
+                return {'text': 'None available, Check in done section'}
         else:
             if len(user.todo) == 0:
-                output += "No Todos added\n Add some on your own"
+                return {'text': "No Todos added\nAdd some on your own"}
             for todo in user.todo:
                 if todo.done:
                     elements.append({"title": todo.todo,
                                      "image_url":"",
                                      "subtitle":todoText(todo)})
-            if len(output) == 0:
-                output += "No Todos are marked done"
+            if len(elements) == 0:
+                return {'text': "No Todos are marked done"}
     else:
         output += "Application ran into some error"
     return {"attachment": {"type": "template",
@@ -197,10 +218,38 @@ def listAll(user=None, all=True, output=""):
 
 
 def addItem(user, reminder):
-    todo = Todo(todo=reminder, done=False, user=user)
-    db.session.add(todo)
-    db.session.commit()
-    return "Added the item: " + reminder
+    if reminder:
+        i = 0
+        try:
+            i = len(user.todo)
+        except:
+            pass
+        todo = Todo(todo=reminder, todoid=i+1, done=False, user=user)
+        db.session.add(todo)
+        db.session.commit()
+        return "Added the item: " + reminder
+    else:
+        return "Sorry did not get you\nPlease try again.."
+
+
+def editItem(user, reminder, number):
+    if user and number and reminder:
+        todos = user.todo
+        todo = None
+        for t in todos:
+            print type(t.todoid), type(number)
+            if int(t.todoid) == number:
+                todo = t
+                break
+        if todo:
+            todo.todo = reminder
+            db.session.add(todo)
+            db.session.commit()
+            return "Changed todo " + todo.todoid + " to: " + todo.todo;
+        else:
+            return "The specified id is not available\nTry again"
+    else:
+        return "Sorry did not get you...\nTry again"
 
 
 def processMessage(sender, text):
@@ -215,29 +264,33 @@ def processMessage(sender, text):
                 "Thank you for visiting",
                 "You can add todo items in our app",
                 "Feel free to chat with our app in natural language",
-                "Eg: remind me to water the plants",
+                "Eg:",
+                "    remind me to water the plants",
                 "    list all todos",
                 "    mark 3 as done",
                 "    show all todos",
                 "    show my done todos",
                 "    remind me to buy some milk",
-                "    add 'something' to todo list"]
+                '    add "something" to todo list',
+                "    change todo two to go to park",
+                "    edit todo 1 as complete the project"]
         for r in retList:
             output += r + "\n"
         output += "\n"
     intent, reminder, number = getFunctionality(text)
     if intent == "greet":
         return {'text': output + "" + greetings()}
-    elif intent == "done":
+    if intent == "done":
         return {'text': output + "" + markDone(user, number)}
-    elif intent == "list":
+    if intent == "list":
         return listAll(user=user,output=output)
-    elif intent == "showdone":
+    if intent == "edit":
+        return {"text": output + "" + editItem(user, reminder, number)}
+    if intent == "showdone":
         return listAll(user=user,all=False)
-    elif intent == "add":
+    if intent == "add":
         return {'text': output + "" + addItem(user, reminder)}
-    else:
-        return {'text': output + "" + "Sorry did not get you...\nTry again"}
+    return {'text': output + "" + "Sorry did not get you...\nTry again"}
 
 
 

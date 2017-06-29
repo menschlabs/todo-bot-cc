@@ -1,3 +1,7 @@
+"""
+This module is powered by Wit.ai
+author: Sai Madhu Bhargav
+"""
 from wit import Wit
 
 ACCESS_TOKEN = "ACLS2PAMEJMQL7WSJTGQU47JFUYJZDOZ"
