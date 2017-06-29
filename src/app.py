@@ -9,7 +9,8 @@ This file creates your application.
 
 import os
 
-import messages
+import random
+from my_nlp import getFunctionality
 import flask
 import requests
 from flask_sqlalchemy import SQLAlchemy
@@ -47,19 +48,6 @@ class Todo(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'),
                         nullable=False)
     user = db.relationship('User', backref='todo')
-
-
-"""class Address(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    # Free form address for simplicity.
-    full_address = db.Column(db.String, nullable=False)
-
-    # Connect each address to exactly one user.
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'),
-                        nullable=False)
-    # This adds an attribute 'user' to each address, and an attribute
-    # 'addresses' (containing a list of addresses) to each user.
-    user = db.relationship('User', backref='addresses')"""
 
 
 @app.route('/')
@@ -107,7 +95,6 @@ def fb_webhook():
     # Get the request body as a dict, parsed from JSON.
     payload = flask.request.json
 
-    pprint.pprint(payload)
     app_url = FACEBOOK_APP_URL % (app.config['FACEBOOK_PAGE_ACCESS_TOKEN'])
     app_data = json.loads(requests.get(app_url).content)
     if app_data['id'] != FACEBOOK_APP_ID:
@@ -118,40 +105,119 @@ def fb_webhook():
 
     # Handle an incoming message.
     # TODO: Improve error handling in case of unexpected payloads.
-    try:
-        if(payload['object'] == 'page' and payload['entry']):
-            for entry in payload['entry']:
-                for event in entry['messaging']:
-                    if 'message' not in event:
-                        continue
-                    message = event['message']
-                    sender = event['sender']['id']
-                    print sender
-                    # Ignore messages sent by us.
-                    if message.get('is_echo', False):
-                        continue
-                    # Ignore messages with non-text content.
-                    if 'text' not in message:
-                        continue
-                    sender_id = event['sender']['id']
-                    request_url = FACEBOOK_API_MESSAGE_SEND_URL % (
-                        app.config['FACEBOOK_PAGE_ACCESS_TOKEN'])
-                    message_text = messages.processMessage(message['text'],
-                                                           sender)
-                    if not message_text:
-                        message_text = "Sorry did not get you..."
-                    requests.post(request_url,
-                                  headers={'Content-Type': 'application/json'},
-                                  json={'recipient': {'id': sender_id},
-                                        'message': {'text': message_text}})
+    if(payload['object'] == 'page' and payload['entry']):
+        for entry in payload['entry']:
+            for event in entry['messaging']:
+                if 'message' not in event:
+                    continue
+                message = event['message']
+                # Ignore messages sent by us.
+                if message.get('is_echo', False):
+                    continue
+                # Ignore messages with non-text content.
+                if 'text' not in message:
+                    continue
+                pprint.pprint(payload)
+                sender_id = event['sender']['id']
+                request_url = FACEBOOK_API_MESSAGE_SEND_URL % (
+                    app.config['FACEBOOK_PAGE_ACCESS_TOKEN'])
+                requests.post(request_url,
+                              headers={'Content-Type': 'application/json'},
+                               json={"recipient":{"id":sender_id},
+                                     "sender_action":"typing_on"})
+                message_json = processMessage(sender_id, message['text'])
+                requests.post(request_url,
+                              headers={'Content-Type': 'application/json'},
+                              json={'recipient': {'id': sender_id},
+                                    'message': message_json})
 
-        # Return an empty response.
-        return ''
+    # Return an empty response.
+    return ''
+
+
+GREETINGS = ['Hello','Hi!','Hey!']
+
+
+def greetings():
+    return random.choice(GREETINGS)
+
+
+def markDone(user, number):
+    if user and number:
+        todo = user.todo[number]
+        todo.done = True
+        db.session.add(todo)
+        db.session.commit()
+        return "Marked Todo: " + todo.todo + " as done!"
+    else:
+        return "Sorry did not get you...\nTry again"
+
+
+def listAll(user=None, all=True):
+    if user:
+        output = ""
+        if all:
+            i = 0
+            if len(user.todo) == 0:
+                return "No Todos added\nAdd some on your own"
+            for todo in user.todo:
+                output += str(i) + "# " + todo.todo + "\n"
+                i += 1
+            return output
+        else:
+            i = 0
+            if len(user.todo) == 0:
+                return "No Todos added\n Add some on your own"
+            for todo in user.todo:
+                if todo.done:
+                    output += str(i) + "# " + todo.todo + "\n"
+                i += 1
+            if len(output) == 0:
+                output = "No Todos are marked done"
+            return output
+    else:
+        return "Application ran into some error"
+
+
+def addItem(user, reminder):
+    todo = Todo(todo=reminder, done=False, user=user)
+    db.session.add(todo)
+    db.session.commit()
+    return "Added the item: " + reminder
+
+
+def processMessage(sender, text):
+    output = ""
+    try:
+        user = db.session.query(User).filter_by(userid=sender).one()
     except:
-        requests.post(request_url,
-                      headers={'Content-Type': 'application/json'},
-                      json={'recipient': {'id': sender_id},
-                            'message': {'text': "Something Happened"}})
+        user = User(userid = sender)
+        db.session.add(user)
+        db.session.commit()
+        retList=["Welcome to the Todo List app on FB",
+                "Thank you for visiting",
+                "You can add todo items in our app",
+                "Feel free to chat with our app in natural language",
+                "Eg: remind me to water the plants",
+                "Eg: list all todos",
+                "Eg: mark 3 as done"]
+        for r in retList:
+            output += r + "\n"
+        output += "\n"
+    intent, reminder, number = getFunctionality(text)
+    if intent == "greet":
+        return {'text': output + "" + greetings()}
+    elif intent == "done":
+        return {'text': output + "" + markDone(user, number)}
+    elif intent == "list":
+        return {'text': output + "" + listAll(user=user)}
+    elif intent == "showdone":
+        return {'text': output + "" + listAll(user=user,all=False)}
+    elif intent == "add":
+        return {'text': output + "" + addItem(user, reminder)}
+    else:
+        return {'text': output + "" + "Sorry did not get you...\nTry again"}
+
 
 
 if __name__ == '__main__':
