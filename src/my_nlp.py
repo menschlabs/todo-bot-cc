@@ -3,8 +3,9 @@ This module is powered by Wit.ai
 author: Sai Madhu Bhargav
 """
 from wit import Wit
+import os
 
-ACCESS_TOKEN = "ACLS2PAMEJMQL7WSJTGQU47JFUYJZDOZ"
+ACCESS_TOKEN = os.environ['WIT_ACCESS_TOKEN']
 
 client = Wit(access_token=ACCESS_TOKEN)
 

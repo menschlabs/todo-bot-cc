@@ -32,7 +32,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
 app.config['FACEBOOK_PAGE_ACCESS_TOKEN'] = os.environ[
     'FACEBOOK_PAGE_ACCESS_TOKEN']
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'mysecretkey')
-app.config['FACEBOOK_WEBHOOK_VERIFY_TOKEN'] = 'mysecretverifytoken'
+app.config['FACEBOOK_WEBHOOK_VERIFY_TOKEN'] = os.environ['SECRET_VERIFY_TOKEN']
 
 
 db = SQLAlchemy(app)
