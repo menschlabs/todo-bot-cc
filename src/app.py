@@ -219,6 +219,8 @@ def processMessage(sender, text):
                 "    list all todos",
                 "    mark 3 as done",
                 "    show all todos",
+                "    show my done todos",
+                "    remind me to buy some milk",
                 "    add 'something' to todo list"]
         for r in retList:
             output += r + "\n"
@@ -229,11 +231,9 @@ def processMessage(sender, text):
     elif intent == "done":
         return {'text': output + "" + markDone(user, number)}
     elif intent == "list":
-        x = listAll(user=user,output=output)
-        pprint.pprint(x)
-        return x
+        return listAll(user=user,output=output)
     elif intent == "showdone":
-        return {'text': output + "" + listAll(user=user,all=False)}
+        return listAll(user=user,all=False)
     elif intent == "add":
         return {'text': output + "" + addItem(user, reminder)}
     else:
