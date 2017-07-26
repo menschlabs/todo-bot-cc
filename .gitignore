@@ -35,3 +35,6 @@ pip-log.txt
 *.[oa]
 *.py[co]
 *.rbc
+
+# Token files
+toks.txt
